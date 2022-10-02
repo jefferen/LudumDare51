@@ -1,62 +1,176 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using static TileEffect;
+using static UnityEngine.Rendering.DebugUI;
 
 public class GameMaster : MonoBehaviour
 {
-    [SerializeField]
-    TMPro.TextMeshProUGUI DemandedDiceValueText;
+    PlayerManager Player;
 
     [SerializeField]
-    PlayerManager player;
+    List<Sprite> sprites;
 
-    SpriteRenderer spriteRenderer;
+    [SerializeField]
+    SpriteRenderer dice;
 
     int DemandedDiceValue;
 
+    [SerializeField]
+    Vector2 NextDiceValueTime, NextDeathStareTime; // 2.2 - 7.1    // 3.6 - 7.5
+
+    [SerializeField]
+    GameObject gameOverScreen;
+
+    [SerializeField]
+    ScoreManager scoreManager;
+
+    [SerializeField]
+    BoardManager boardManager;
+
+    [SerializeField]
+    CameraShakeCinemachine shakeCinemachine;
+
+    [SerializeField]
+    Animator animator;
+
+    bool StaringAtPlayer;
+
+    [SerializeField]
+    GameObject Laser;
+
+    [SerializeField]
+    Material BigDice;
+
+    [SerializeField]
+    float shuffleSpeed;
+
+    [SerializeField]
+    AudioClip DeathStareAudio;
+
+    AudioSource audioSource;
     void Start()
     {
-        spriteRenderer = GetComponent<SpriteRenderer>();
-        spriteRenderer.color = Color.green;
+        audioSource = GetComponent<AudioSource>();
+        Player = GameObject.FindGameObjectWithTag("Player").GetComponent<PlayerManager>();
         SetDemandedDiceValue();
-        Invoke("DeathStare", 5f); // maybe change to higher value, for testing we have low value
+        Invoke("AnimDeathStare", 5f); // maybe change to higher value, for testing we have low value
     }
 
-    IEnumerator DeathStare2()
+    IEnumerator StaringAtPlayerWithDeathStare()
     {
         CancelInvoke();
-        spriteRenderer.color = Color.red;
-        float t = 0;
-        float StareTime = Random.Range(2.25f, 2.75f);
 
-        while (t <= StareTime)
+        while (StaringAtPlayer)
         {
-            t += Time.deltaTime;
-            if (player.StandingTileValue != DemandedDiceValue) KillPlayer();
+            audioSource.PlayOneShot(DeathStareAudio);
+            if (Player.StandingTileValue != DemandedDiceValue) DeathShoot();
             yield return null;
         }
-        spriteRenderer.color = Color.green;
 
-        float NextDiceValueTime = Random.Range(2.2f, 7.5f);
-        float NextDeathStareTime = Random.Range(3.6f, 7.5f) + NextDiceValueTime;
+        float NextDiceValueTimeNow = Random.Range(NextDiceValueTime.x, NextDiceValueTime.y);
+        float NextDeathStareTimeNow = Random.Range(NextDeathStareTime.x, NextDeathStareTime.y) + NextDiceValueTimeNow; // these two values should be changed over time to increase the dificulty
 
-        Invoke("SetDemandedDiceValue", NextDiceValueTime);
-        Invoke("DeathStare", NextDeathStareTime);
+        animator.SetBool("DeathStare", false);
+
+        Invoke("SetDemandedDiceValue", NextDiceValueTimeNow);
+        Invoke("AnimDeathStare", NextDeathStareTimeNow);
     }
 
-    void DeathStare()
+    void AnimDeathStare()
     {
-        StartCoroutine(DeathStare2());  
+        animator.SetBool("DeathStare", true);
+    }
+    public void DeathStare()
+    {
+        StaringAtPlayer = true; // this animator thingy is really good....... I want to call the anim then do anim how hard is that
+        StartCoroutine(StaringAtPlayerWithDeathStare());
     }
 
-    void KillPlayer() // shot player and show death title
+    public void StopDeathStare()
     {
-        ReloadLvl.ReLoadLevel();
+        StaringAtPlayer = false;
+    }
+
+    public void KillPlayer() // shot player and show death title
+    {
+        audioSource.Play();
+        StopAllCoroutines();
+        CancelInvoke();
+
+        animator.SetBool("DeathStare", false);
+
+        shakeCinemachine.Shake();
+
+        boardManager.StopShuffleTime();
+
+        StartCoroutine(ShowEndScreen());
+    }
+
+    void DeathShoot()
+    {
+        KillPlayer();
+        Instantiate(Laser, transform.position, Quaternion.identity);
+    }
+
+    IEnumerator ShowEndScreen()
+    {
+        yield return new WaitForSeconds(1.5f);
+        gameOverScreen.GetComponent<Animator>().enabled = true;
+        yield return new WaitForSeconds(2.7f);
+        scoreManager.GameEnd();
     }
 
     void SetDemandedDiceValue()
     {
+        StartCoroutine(ShuffleEffect());
+    }
+
+    IEnumerator ShuffleEffect() // i know i know, duplicated code
+    {
+        float t = 1;
+        int xOrY = Random.Range(0, 2);
+
+        while (t < 0)
+        {
+            t -= Time.deltaTime * shuffleSpeed;
+
+            SetShuffle(t, System.Convert.ToBoolean(xOrY));
+
+            yield return null;
+        }
+
+        yield return new WaitForSeconds(0.5f);
+
         DemandedDiceValue = Random.Range(1, 7);
-        DemandedDiceValueText.text = DemandedDiceValue.ToString();
+        dice.sprite = sprites[DemandedDiceValue - 1];
+
+        t = 0;
+        xOrY = Random.Range(0, 2);
+
+        while (t <= 1)
+        {
+            t += Time.deltaTime * shuffleSpeed;
+
+            SetShuffle(t, System.Convert.ToBoolean(xOrY));
+
+            yield return null;
+        }
+
+        BigDice.mainTextureScale = new Vector2(1, 1);
+    }
+
+    void SetShuffle(float t, bool x)
+    {
+        if (x)
+        {
+            BigDice.mainTextureScale = new Vector2(1, t);
+        }
+        else BigDice.mainTextureScale = new Vector2(t, 1);
+    }
+
+    public void ReloadLevel()
+    {
+        ReloadLvl.ReLoadLevel();
     }
 }

@@ -14,11 +14,14 @@ public class TileEffect : MonoBehaviour
     [SerializeField]
     Color Active, NonActive;
 
+    bool Deadly;
+
     private void Awake()
     {    
         Player = GameObject.FindGameObjectWithTag("Player").GetComponent<PlayerManager>();
         spriteRenderer = GetComponent<SpriteRenderer>();
         spriteRenderer.color = NonActive;
+        Deadly = false;
     }
 
     public enum Dice
@@ -28,7 +31,9 @@ public class TileEffect : MonoBehaviour
         Three,
         Four,
         Five,
-        Six
+        Six,
+        None,
+        Hole,
     }
 
     Dice TileDiceValue;
@@ -37,18 +42,20 @@ public class TileEffect : MonoBehaviour
     {
         TileDiceValue = (Dice)value;
         spriteRenderer.sprite = sprites[value - 1];
+        if(value == 8) Deadly = true;
+        else Deadly = false;
     }
 
     private void OnMouseOver() // hover and click or hold mouse 0
     {
-        if(Input.GetMouseButton(0)) Player.MoveTowardsTarget(transform, (int)TileDiceValue);
+        if (Deadly) return;
+        if(Input.GetMouseButton(0)) Player?.MoveTowardsTarget(transform.position, (int)TileDiceValue);
     }
 
-    private void OnTriggerEnter2D(Collider2D other)
+    private void OnTriggerStay2D(Collider2D other)
     {
         spriteRenderer.color = Active;
     }
-
     private void OnTriggerExit2D(Collider2D other)
     {
         spriteRenderer.color = NonActive;
